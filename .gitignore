@@ -1,0 +1,19 @@
+# Built libsurreal binary; not part of source distribution
+libsurrealdb_c.dylib
+libsurrealdb_c.so
+libsurrealdb_c.dll
+*.so
+*.dylib
+*.dll
+
+# Local editor / agent state
+.claude/
+
+# Julia precompile output
+*.cov
+*.jl.cov
+*.jl.mem
+deps/build.log
+
+# OS
+.DS_Store
