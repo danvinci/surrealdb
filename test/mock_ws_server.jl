@@ -14,6 +14,12 @@ module MockWS
 
 using WebSockets, Sockets, JSON, UUIDs
 
+# SDK sends `Sec-WebSocket-Protocol: json` (required by SurrealDB v3+);
+# WebSockets.jl rejects upgrades with subprotocols not on the whitelist,
+# so register `json` here. Mirror this in any other test harness that
+# wraps WebSockets.upgrade.
+WebSockets.addsubproto("json")
+
 mutable struct Mock
     port::Int
     listener::Sockets.TCPServer

@@ -34,11 +34,17 @@ function _ws_reconnect_loop(conn::RemoteWSConnection)
         attempt += 1
 
         try
-            # `require_ssl_verification` propagates to HTTP.jl's TLS layer
-            # via WebSockets.open's kwargs forwarding. Defaults to verify on;
-            # tests with self-signed certs flip it via the `tls_verify`
-            # connect kwarg.
+            # `subprotocol = "json"` sends `Sec-WebSocket-Protocol: json` on
+            # the upgrade. SurrealDB 3.0+ requires the protocol format to be
+            # explicit; v2.x inferred it. Without this, v3 servers accept
+            # the upgrade then drop the first RPC mid-request (the SDK
+            # surfaces it as `RPCError(-1): Connection lost mid-request`).
+            #
+            # `require_ssl_verification` propagates to HTTP.jl's TLS layer.
+            # Defaults to verify on; tests with self-signed certs flip it
+            # via the `tls_verify` connect kwarg.
             WebSockets.open(conn.url;
+                            subprotocol = "json",
                             require_ssl_verification = conn.tls_verify) do ws
                 conn.ws = ws
                 attempt = 0           # consecutive-failure counter resets
