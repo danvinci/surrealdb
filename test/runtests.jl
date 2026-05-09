@@ -51,6 +51,11 @@ SERVER_AVAILABLE || @info "Skipping server-dependent tests — no SurrealDB at $
         include("test_errors.jl")
     end
 
+    # Property-style fuzz over parser entry points.
+    @testset "Fuzz" begin
+        include("test_fuzz.jl")
+    end
+
     # Reconnect-path state-machine unit tests, no network.
     @testset "Reconnect" begin
         include("test_reconnect.jl")
