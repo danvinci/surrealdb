@@ -36,12 +36,15 @@ jobs:
         run: |
           docker run -d -p 8443:8443 \
             --name surrealdb-tls \
+            -e SURREAL_LOG=debug \
+            -e RUST_LOG=surrealdb=debug,surrealdb_server=debug,surrealdb::net=trace \
             -v $PWD/cert.pem:/cert.pem \
             -v $PWD/key.pem:/key.pem \
             surrealdb/surrealdb:latest \
             start --user root --pass root \
             --bind 0.0.0.0:8443 \
             --web-crt /cert.pem --web-key /key.pem \
+            --log debug \
             memory
 
       - name: Wait for SurrealDB TLS port
@@ -68,6 +71,6 @@ jobs:
             SurrealDB.close!(db)
           '
 
-      - name: Docker logs (on failure)
-        if: failure()
-        run: docker logs surrealdb-tls
+      - name: Docker logs (always)
+        if: always()
+        run: docker logs surrealdb-tls 2>&1 | tail -100

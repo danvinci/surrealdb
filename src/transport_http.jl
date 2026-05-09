@@ -31,6 +31,7 @@ function _rpc_call_http(client::SurrealClient{<:RemoteHTTPConnection}, method::S
     unlock(conn.lock)
 
     @debug "SurrealDB http RPC →" rid=rid method=effective_method
+    resp = nothing  # JET noticed it could be undefined if HTTP.post throws
     try
         resp = HTTP.post(url, headers, JSON.json(msg))
         if resp.status != 200

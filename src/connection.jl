@@ -158,8 +158,11 @@ function _parse_scheme(url::String)
     m = match(r"^(mem(?:ory)?|surrealkv|ws|wss|http|https)://", url)
     if m === nothing
         # Extract the scheme prefix (or report the whole URL if there isn't one)
-        scheme = something(match(r"^([a-zA-Z][a-zA-Z0-9+.-]*)://", url), nothing)
-        throw(UnsupportedEngineError(scheme === nothing ? url : scheme.captures[1]))
+        scheme = match(r"^([a-zA-Z][a-zA-Z0-9+.-]*)://", url)
+        # `scheme.captures[1]` is `Union{Nothing, SubString}` per regex semantics;
+        # coerce to `String` so the typed UnsupportedEngineError ctor matches.
+        bad = scheme === nothing ? url : String(something(scheme.captures[1], url))
+        throw(UnsupportedEngineError(bad))
     end
     scheme = m.captures[1]
     if scheme == "memory" || scheme == "mem"
