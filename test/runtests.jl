@@ -90,6 +90,10 @@ SERVER_AVAILABLE || @info "Skipping server-dependent tests — no SurrealDB at $
         @testset "Integration Gaps" begin
             include("test_integration_gaps.jl")
         end
+        # Conformance ports from surrealdb.go's TestSurrealDBSuite.
+        @testset "Go SDK Conformance" begin
+            include("test_go_conformance.jl")
+        end
     end
 
     # --- Embedded (requires libsurreal) ---
