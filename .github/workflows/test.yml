@@ -17,21 +17,36 @@ jobs:
         with:
           version: ${{ matrix.julia-version }}
       - uses: julia-actions/cache@v2
-      - run: julia --project=. test/runtests.jl
+      - uses: julia-actions/julia-runtest@v1
+      - uses: julia-actions/julia-processcoverage@v1
+        if: matrix.julia-version == '1'
+      - uses: codecov/codecov-action@v4
+        if: matrix.julia-version == '1'
+        with:
+          files: lcov.info
+          fail_ci_if_error: false
 
+  # Matrix across SurrealDB server versions to catch version-skew bugs.
+  # `latest` floats; the pinned tags lock in v2.x and v3.x lineages.
   test-remote:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        surreal-image:
+          - surrealdb/surrealdb:v2-latest
+          - surrealdb/surrealdb:latest
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
         with:
           version: '1'
       - uses: julia-actions/cache@v2
-      - name: Start SurrealDB
+      - name: Start SurrealDB (${{ matrix.surreal-image }})
         run: |
           docker run -d -p 8000:8000 \
             --name surrealdb \
-            surrealdb/surrealdb:latest \
+            ${{ matrix.surreal-image }} \
             start --user root --pass root memory
       - name: Wait for SurrealDB
         run: |
@@ -49,8 +64,15 @@ jobs:
         if: failure()
         run: docker logs surrealdb
 
+  # Embedded matrix: linux x86_64 (glibc) and macos arm64 (libSystem).
+  # The s2 audit hit an ARM64-only `sr_object_keys` FFI bug — having
+  # macos-latest in the matrix catches that bug class on every PR.
   test-embedded:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
@@ -74,12 +96,13 @@ jobs:
           fi
           cd /tmp/surrealdb.c
           cargo build --release
-          cp target/release/libsurrealdb_c.so ${RUNNER_TEMP}/libsurreal.so || \
-            cp target/release/libsurrealdb_c.dylib ${RUNNER_TEMP}/libsurreal.so || \
-            cp target/release/surrealdb_c.dll ${RUNNER_TEMP}/libsurreal.so
+          # Each platform produces a different filename; copy whichever exists.
+          cp target/release/libsurrealdb_c.so ${RUNNER_TEMP}/libsurreal.lib 2>/dev/null || \
+            cp target/release/libsurrealdb_c.dylib ${RUNNER_TEMP}/libsurreal.lib 2>/dev/null || \
+            cp target/release/surrealdb_c.dll ${RUNNER_TEMP}/libsurreal.lib
         env:
           CARGO_PROFILE_RELEASE_DEBUG: 0
       - name: Run full suite (embedded loaded via SURREALDB_LIB)
         run: julia --project=. test/runtests.jl
         env:
-          SURREALDB_LIB: ${{ runner.temp }}/libsurreal.so
+          SURREALDB_LIB: ${{ runner.temp }}/libsurreal.lib
