@@ -22,7 +22,13 @@ const TEST_DB = "test"
 const TEST_URL = get(ENV, "SURREALDB_URL", "ws://localhost:8001")
 
 function get_test_client(; url=TEST_URL)
-    client = SurrealDB.connect(url)
+    # `ping_interval=0` disables the keepalive task. Without this, every
+    # test client spawns a Timer + @async task that may not be torn down
+    # cleanly between rapid connect/close cycles, eventually starving the
+    # scheduler and making the 6th-or-so connect hang past its 2.5s
+    # timeout. Tests don't need keepalive — they're synchronous and
+    # short-lived.
+    client = SurrealDB.connect(url; ping_interval=0.0)
     SurrealDB.use!(client, TEST_NS, TEST_DB)
     SurrealDB.signin!(client, SurrealDB.RootAuth("root", "root"))
     return client
