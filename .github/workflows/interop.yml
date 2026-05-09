@@ -46,7 +46,7 @@ jobs:
         env:
           SURREALDB_URL: ws://localhost:8000
 
-      # Reverse: Julia writes, Python reads. Same fixtures, different
+      # Reverse: Julia writes, others read. Same fixtures, different
       # direction — catches serialization drift in our writer that the
       # forward direction can't see.
       - name: Reverse — Julia writes fixtures
@@ -57,3 +57,19 @@ jobs:
         run: python test/interop/read_test_data.py
         env:
           SURREALDB_URL: ws://localhost:8000/rpc
+
+      # Cross-check via a second SDK. Same fixtures, Go decoder this time.
+      # If only one of Python or Go disagrees, the bug is in that SDK's
+      # decoder; if both disagree, the bug is in our encoder.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Reverse — Go reads, asserts equal
+        run: |
+          mkdir -p /tmp/go-interop && cd /tmp/go-interop
+          go mod init interop 2>/dev/null || true
+          go get github.com/surrealdb/surrealdb.go@latest
+          cp ${{ github.workspace }}/test/interop/read_test_data.go main.go
+          go run main.go
+        env:
+          SURREALDB_URL: ws://localhost:8000

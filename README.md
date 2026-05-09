@@ -1,8 +1,21 @@
 # SurrealDB.jl
 
+[![Test](https://github.com/danvinci/surrealdb/actions/workflows/test.yml/badge.svg)](https://github.com/danvinci/surrealdb/actions/workflows/test.yml)
+[![Benchmark](https://github.com/danvinci/surrealdb/actions/workflows/bench.yml/badge.svg)](https://github.com/danvinci/surrealdb/actions/workflows/bench.yml)
+[![Interop](https://github.com/danvinci/surrealdb/actions/workflows/interop.yml/badge.svg)](https://github.com/danvinci/surrealdb/actions/workflows/interop.yml)
+[![Docs](https://github.com/danvinci/surrealdb/actions/workflows/docs.yml/badge.svg)](https://danvinci.github.io/surrealdb/)
+[![codecov](https://codecov.io/gh/danvinci/surrealdb/branch/main/graph/badge.svg)](https://codecov.io/gh/danvinci/surrealdb)
+
 Julia client for [SurrealDB](https://surrealdb.com). Talks to a remote
 `surreal` server over WebSocket or HTTP, or runs the database in-process
 via `libsurreal`. Same API for both.
+
+Cross-tested against the [official Go](https://github.com/surrealdb/surrealdb.go)
+and [Python](https://github.com/surrealdb/surrealdb.py) SDKs: 12 testsets
+ported from `surrealdb.go/db_test.go` run on every CI cycle, and an
+interop harness writes fixtures from one SDK and reads them with the
+others (Python ↔ Julia, Julia → Go) to catch serialization drift across
+implementations. Tested against SurrealDB v2 and v3.
 
 ## Quickstart
 
