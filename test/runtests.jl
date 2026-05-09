@@ -128,5 +128,8 @@ SERVER_AVAILABLE || @info "Skipping server-dependent tests — no SurrealDB at $
         @testset "FFI Types" begin
             include("test_ffi_types.jl")
         end
+        @testset "Memory leak (embedded)" begin
+            include("test_memory.jl")
+        end
     end
 end
