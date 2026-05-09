@@ -46,6 +46,14 @@ SERVER_AVAILABLE || @info "Skipping server-dependent tests — no SurrealDB at $
         include("test_types.jl")
     end
 
+    @testset "Public API surface" begin
+        include("test_api_surface.jl")
+    end
+
+    @testset "Aqua" begin
+        include("test_aqua.jl")
+    end
+
     # Error parser — synthetic payloads, no network.
     @testset "Errors" begin
         include("test_errors.jl")

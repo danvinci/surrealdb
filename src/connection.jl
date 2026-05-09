@@ -217,10 +217,13 @@ end
 function _close_remote!(conn::RemoteConnection)
     conn.reconnect = false
     _set_status!(conn, :disconnected)
-    _stop_pinger!(conn)
+    # Pinger only exists on the WS transport; HTTP doesn't have one.
+    # Short-circuit BEFORE calling _stop_pinger! since that has no method
+    # for RemoteHTTPConnection (intentional dispatch tightening from R10).
     if conn isa RemoteHTTPConnection
         return nothing
     end
+    _stop_pinger!(conn)
     try
         put!(conn.write_channel, "")
     catch

@@ -22,9 +22,15 @@ MetaGraphsNext = "fa8bd995-216d-47f1-8a91-f3b68fbeb377"
 SurrealDBMetaGraphsNextExt = ["MetaGraphsNext", "Graphs"]
 
 [compat]
+Dates = "1"
+Graphs = "1"
 HTTP = "1"
 JSON = "1"
+Libdl = "1"
+MetaGraphsNext = "0.7, 0.8"
 StructTypes = "1"
 Tables = "1.10"
+Test = "1"
+UUIDs = "1"
 WebSockets = "1.6"
 julia = "1.9"
