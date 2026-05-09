@@ -7,6 +7,7 @@ jobs:
   # (1.9 LTS) and current stable to catch version-skew regressions.
   test-unit:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -30,6 +31,7 @@ jobs:
   # `latest` floats; the pinned tags lock in v2.x and v3.x lineages.
   test-remote:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -76,6 +78,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
