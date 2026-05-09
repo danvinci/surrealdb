@@ -50,10 +50,17 @@ function run_benchmarks(json_output::Bool)
         ns="test", db="test",
         auth=SurrealDB.RootAuth("root", "root"))
 
+    # Idempotent setup: tolerate the table or pre-records already existing
+    # (e.g. CI runs the bench twice in one job for human + JSON output).
+    try; SurrealDB.query(client, "REMOVE TABLE IF EXISTS bench"); catch; end
     SurrealDB.query(client, "DEFINE TABLE bench TYPE ANY SCHEMALESS")
     for i in 1:100
-        SurrealDB.create(client, SurrealDB.RecordID("bench", "pre$i"),
-            Dict("val" => i))
+        try
+            SurrealDB.create(client, SurrealDB.RecordID("bench", "pre$i"),
+                Dict("val" => i))
+        catch e
+            e isa SurrealDB.AlreadyExistsError || rethrow()
+        end
     end
 
     for _ in 1:WARMUP
