@@ -1,0 +1,43 @@
+name: Interop
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  python-julia:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install surrealdb-py
+        run: pip install --upgrade pip && pip install surrealdb
+      - name: Start SurrealDB
+        run: |
+          docker run -d -p 8000:8000 \
+            --name surrealdb \
+            surrealdb/surrealdb:latest \
+            start --user root --pass root memory
+      - name: Wait for SurrealDB
+        run: |
+          for i in $(seq 1 30); do
+            curl -s -X POST http://localhost:8000/rpc \
+              -H "Content-Type: application/json" \
+              -d '{"id":1,"method":"version","params":[]}' && break
+            sleep 1
+          done
+      - name: Write fixtures from Python
+        run: python test/interop/write_test_data.py
+        env:
+          SURREALDB_URL: ws://localhost:8000/rpc
+      - name: Read fixtures from Julia, assert equality
+        run: julia --project=. -e 'include("test/interop/test_interop.jl")'
+        env:
+          SURREALDB_URL: ws://localhost:8000
