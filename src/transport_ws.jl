@@ -256,17 +256,26 @@ end
 # requests so `_rpc_call`'s `take!` returns and its `if haskey(response,
 # "error")` arm raises.
 function _signal_inflight_disconnect!(conn::RemoteWSConnection)
-    lock(conn.lock) do
-        for ch in values(conn.response_channels)
-            if isopen(ch)
-                try
-                    put!(ch, Dict("error" => Dict("code" => -1,
-                        "message" => "Connection lost mid-request")))
-                catch
-                end
+    # Snapshot channels under lock, signal each AFTER release. `put!` on a
+    # 1-cap Channel blocks if the channel already holds the real response
+    # (race: server delivered just before socket dropped). Holding `conn.lock`
+    # across a blocking `put!` deadlocks the reader, which needs the lock to
+    # dispatch the take! that would drain the channel.
+    channels = lock(conn.lock) do
+        chs = collect(values(conn.response_channels))
+        empty!(conn.response_channels)
+        chs
+    end
+    for ch in channels
+        # If the channel is already full (the real response landed), the
+        # caller's take! will succeed normally; no synthetic error needed.
+        if isopen(ch) && !isready(ch)
+            try
+                put!(ch, Dict("error" => Dict("code" => -1,
+                    "message" => "Connection lost mid-request")))
+            catch
             end
         end
-        empty!(conn.response_channels)
     end
 end
 
@@ -405,15 +414,23 @@ function _rpc_call_ws(client::SurrealClient{<:RemoteWSConnection}, method::Strin
     while true
         attempt += 1
 
-        lock(conn.lock)
-        conn.request_id += 1
-        rid = conn.request_id
+        # Hold `conn.lock` ONLY for response_channels registration. Releasing
+        # before `put!(conn.write_channel, ...)` prevents the writer-blocked
+        # -on-full-buffer scenario from deadlocking the reader (which needs
+        # the same lock to dispatch the response that would unblock take!).
+        rid = 0
         ch = Channel{Any}(1)
-        conn.response_channels[rid] = ch
+        registered = false
+        lock(conn.lock) do
+            conn.request_id += 1
+            rid = conn.request_id
+            if conn.write_channel !== nothing && isopen(conn.write_channel)
+                conn.response_channels[rid] = ch
+                registered = true
+            end
+        end
 
-        if conn.write_channel === nothing || !isopen(conn.write_channel)
-            delete!(conn.response_channels, rid)
-            unlock(conn.lock)
+        if !registered
             if attempt < max_retries && conn.status == :reconnecting
                 sleep(0.5)
                 continue
@@ -433,15 +450,15 @@ function _rpc_call_ws(client::SurrealClient{<:RemoteWSConnection}, method::Strin
         try
             put!(conn.write_channel, json_msg)
         catch e
-            delete!(conn.response_channels, rid)
-            unlock(conn.lock)
+            lock(conn.lock) do
+                delete!(conn.response_channels, rid)
+            end
             if attempt < max_retries
                 sleep(0.5)
                 continue
             end
             throw(ConnectionError("Failed to send RPC: $e", e))
         end
-        unlock(conn.lock)
 
         response = try
             take!(ch)
