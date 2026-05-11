@@ -28,9 +28,13 @@ function get_test_client(; url=TEST_URL)
     # scheduler and making the 6th-or-so connect hang past its 2.5s
     # timeout. Tests don't need keepalive — they're synchronous and
     # short-lived.
+    println(stderr, "[get_test_client] connect..."); flush(stderr)
     client = SurrealDB.connect(url; ping_interval=0.0)
+    println(stderr, "[get_test_client] use!..."); flush(stderr)
     SurrealDB.use!(client, TEST_NS, TEST_DB)
+    println(stderr, "[get_test_client] signin!..."); flush(stderr)
     SurrealDB.signin!(client, SurrealDB.RootAuth("root", "root"))
+    println(stderr, "[get_test_client] ready"); flush(stderr)
     return client
 end
 
