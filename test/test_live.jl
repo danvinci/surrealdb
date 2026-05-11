@@ -2,7 +2,9 @@ client = get_test_client()
 
 # Bootstrap: create tables for live queries (v3 requires existing tables)
 for tbl in ["test_live", "test_live_notif", "test_live_upd", "test_live_del", "test_live_a", "test_live_b", "test_live_dc"]
+    println(stderr, "[bootstrap] create $tbl"); flush(stderr)
     try SurrealDB.create(client, tbl * ":__init", Dict("_init" => true)); catch; end
+    println(stderr, "[bootstrap] done $tbl"); flush(stderr)
 end
 
 @testset "Live subscription creation" begin
