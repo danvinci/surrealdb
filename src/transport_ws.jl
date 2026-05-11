@@ -229,6 +229,13 @@ function _ws_reader_task(conn::RemoteWSConnection)
         elseif get(msg, "method", "") == "notify"
             @debug "SurrealDB ws notification ←"
             _dispatch_notification(conn, msg)
+        else
+            # DIAG: catch anything that's neither an id-keyed response nor a
+            # "notify"-method push. v3 may use a different envelope shape; if
+            # so the live-notification testsets will fail and this line tells
+            # us what the actual frame looks like.
+            println(stderr, "[ws unrecognized] $(first(String(data), 300))")
+            flush(stderr)
         end
     end
 end
@@ -360,6 +367,10 @@ function _dispatch_notification(conn::RemoteWSConnection, notif)
     params = get(notif, "params", Dict{String, Any}())
     query_id = params isa Dict ? get(params, "id", nothing) : nothing
     if query_id === nothing
+        # DIAG: log the dropped notification so we can see what shape the
+        # server actually sent (helps diagnose v3 protocol changes).
+        println(stderr, "[notif dropped: no id] $(notif)")
+        flush(stderr)
         return
     end
     qid = string(query_id)
