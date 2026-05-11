@@ -180,16 +180,28 @@ function _ws_writer_task(conn::RemoteWSConnection)
     # (when status is still :reconnecting) actually go out. The reconnect loop
     # owns status; the writer just pumps bytes while the socket is up.
     while conn.ws !== nothing && isopen(conn.ws)
-        try
-            msg = take!(conn.write_channel)
-            if msg == ""
-                break
-            end
-            if conn.ws !== nothing && isopen(conn.ws)
-                write(conn.ws, msg)
-            end
+        msg = try
+            take!(conn.write_channel)
         catch e
-            if e isa InvalidStateException
+            # Channel closed externally — exit cleanly.
+            break
+        end
+        if msg == ""
+            break
+        end
+        if conn.ws !== nothing && isopen(conn.ws)
+            try
+                write(conn.ws, msg)
+            catch e
+                e isa InvalidStateException && break
+                # A write failure swallowed silently would orphan the RPC
+                # waiting on the response channel for `msg` — the request
+                # never reached the server, but the caller still blocks on
+                # take!. Force-close the socket so the reader EOFs and the
+                # reconnect loop signals in-flight RPCs with a synthetic
+                # transport error.
+                @debug "SurrealDB ws writer error; closing socket" exception=e
+                try; close(conn.ws); catch; end
                 break
             end
         end
