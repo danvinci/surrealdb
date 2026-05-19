@@ -244,13 +244,17 @@ function _ws_reader_task(conn::RemoteWSConnection)
                 end
             end
         elseif get(msg, "method", "") == "notify"
-            @debug "SurrealDB ws notification ←"
+            # Legacy notification envelope: {method:"notify", params:{id, ...}}
+            @debug "SurrealDB ws notification ← (legacy)"
             _dispatch_notification(conn, msg)
+        elseif _is_live_notification(msg)
+            # SurrealDB v2/v3 live-notification envelope: no method, no top-
+            # level id, payload at msg.result.{action,id,record,result,session}.
+            # Confirmed against test-remote CI logs on d316a6f for both v2
+            # and v3 server images.
+            @debug "SurrealDB ws notification ←"
+            _dispatch_live_notification(conn, msg["result"])
         else
-            # DIAG: catch anything that's neither an id-keyed response nor a
-            # "notify"-method push. v3 may use a different envelope shape; if
-            # so the live-notification testsets will fail and this line tells
-            # us what the actual frame looks like.
             println(stderr, "[ws unrecognized] $(first(raw, 300))")
             flush(stderr)
         end
@@ -389,12 +393,61 @@ function _teardown_notification_channel(conn::RemoteWSConnection, query_id::Stri
     return nothing
 end
 
+# Recognize SurrealDB v2/v3 live-notification frames. Shape:
+#   {"result": {"action": "CREATE|UPDATE|DELETE|KILLED",
+#               "id": "<live-uuid>", "record": "...",
+#               "result": <payload>, "session": "..."}}
+# `session` is v3-only; v2 omits it. The discriminator is `result.action` +
+# `result.id` together — both must be present so we don't false-match a plain
+# RPC response that happens to carry a Dict result with an `id` field.
+function _is_live_notification(msg)
+    haskey(msg, "result") || return false
+    r = msg["result"]
+    r isa AbstractDict || return false
+    return haskey(r, "action") && haskey(r, "id")
+end
+
+# v2/v3 notification dispatch. `result` is the inner dict already unwrapped
+# from `msg["result"]` by the reader. The full inner dict is forwarded to the
+# subscriber's channel so callers can branch on `action` and inspect `record`
+# / `result` / `session` — matches surrealdb.py's "yield full notification"
+# behavior (PR #247).
+function _dispatch_live_notification(conn::RemoteWSConnection, result::AbstractDict)
+    query_id = get(result, "id", nothing)
+    query_id === nothing && return nothing
+    qid = string(query_id)
+    action = get(result, "action", "")
+
+    # KILLED is server confirmation of a kill RPC. `kill!` already tore down
+    # the local subscription channel (live.jl), so by the time KILLED lands
+    # `notification_channels[qid]` is gone and the lookup below would no-op
+    # anyway. Drop explicitly to avoid surfacing it to subscribers who didn't
+    # ask for it.
+    action == "KILLED" && return nothing
+
+    lock(conn.notification_lock) do
+        ch = get(conn.notification_channels, qid, nothing)
+        if ch !== nothing && isopen(ch)
+            try
+                put!(ch, result)
+            catch e
+                # Channel closed concurrently by `kill!(sub)` between the
+                # `isopen` check and `put!`. Drop silently.
+                e isa InvalidStateException || rethrow()
+            end
+        end
+    end
+    return nothing
+end
+
+# Legacy `{method:"notify", params:{id, ...}}` envelope. Kept for protocol
+# compatibility in case the server ever falls back to it; current v2/v3 use
+# the unwrapped-result shape above. No production server we exercise emits
+# this shape, but the routing branch is cheap to keep.
 function _dispatch_notification(conn::RemoteWSConnection, notif)
     params = get(notif, "params", Dict{String, Any}())
     query_id = params isa Dict ? get(params, "id", nothing) : nothing
     if query_id === nothing
-        # DIAG: log the dropped notification so we can see what shape the
-        # server actually sent (helps diagnose v3 protocol changes).
         println(stderr, "[notif dropped: no id] $(notif)")
         flush(stderr)
         return
@@ -406,9 +459,6 @@ function _dispatch_notification(conn::RemoteWSConnection, notif)
             try
                 put!(ch, params)
             catch e
-                # Channel closed concurrently by `kill!(sub)` between the
-                # `isopen` check and `put!`. Drop the notification silently —
-                # the subscriber has explicitly torn down.
                 e isa InvalidStateException || rethrow()
             end
         end
