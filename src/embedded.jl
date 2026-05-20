@@ -235,15 +235,19 @@ function SurrealDB._poll_embedded_live(conn::EmbeddedConnection, query_id::Strin
     end
     try
         while isopen(ch)
-            notif = LibSurreal.sr_stream_next(stream)
-            if notif === nothing
-                # Stream closed by server / no more notifications
-                break
-            end
+            raw = LibSurreal.sr_stream_next(stream)
+            raw === nothing && break
+            get(raw, "action", "") == "KILLED" && continue
+            ln = SurrealDB.LiveNotification(
+                string(get(raw, "action", "")),
+                string(get(raw, "query_id", query_id)),
+                nothing,
+                get(raw, "result", nothing),
+                nothing,
+            )
             try
-                put!(ch, notif)
+                put!(ch, ln)
             catch e
-                # Channel closed by kill!() — clean exit, not an error
                 e isa InvalidStateException && break
                 rethrow()
             end

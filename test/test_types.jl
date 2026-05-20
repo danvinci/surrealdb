@@ -130,6 +130,54 @@ end
     @test isempty(rel2.data)
 end
 
+@testset "LiveNotification" begin
+    # v3 envelope shape (with session)
+    n = SurrealDB.LiveNotification(Dict(
+        "action" => "CREATE",
+        "id" => "abc-123",
+        "record" => "users:johnny",
+        "result" => Dict("username" => "johnny"),
+        "session" => "sess-1",
+    ))
+    @test n isa SurrealDB.LiveNotification
+    @test n isa AbstractDict
+    @test n.action == "CREATE"
+    @test n.query_id == "abc-123"
+    @test n.record == "users:johnny"
+    @test n.result == Dict("username" => "johnny")
+    @test n.session == "sess-1"
+
+    # Dict-style access (backwards compat with raw-dict callers)
+    @test n["action"] == "CREATE"
+    @test n["id"] == "abc-123"
+    @test n["record"] == "users:johnny"
+    @test n["session"] == "sess-1"
+    @test get(n, "action", "") == "CREATE"
+    @test get(n, "missing", "DEFAULT") == "DEFAULT"
+    @test haskey(n, "action")
+    @test !haskey(n, "foo")
+    @test length(n) == 5
+    @test_throws KeyError n["foo"]
+
+    # Iteration yields all five pairs
+    pairs = collect(n)
+    @test length(pairs) == 5
+    @test ("action" => "CREATE") in pairs
+
+    # v2 envelope (no session field)
+    n2 = SurrealDB.LiveNotification(Dict(
+        "action" => "UPDATE",
+        "id" => "abc",
+        "record" => "users:johnny",
+        "result" => Dict("v" => 2),
+    ))
+    @test n2.session === nothing
+
+    # Show
+    @test occursin("CREATE", sprint(show, n))
+    @test occursin("users:johnny", sprint(show, n))
+end
+
 @testset "Auth params conversion" begin
     params = SurrealDB._to_params(SurrealDB.RootAuth("r", "p"))
     @test params["user"] == "r"
