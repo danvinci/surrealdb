@@ -28,9 +28,13 @@ using Test
             try; SurrealDB.query(admin, "REMOVE TABLE IF EXISTS jwt_user"); catch; end
             SurrealDB.query(admin, "DEFINE TABLE jwt_user")
             # 1-second session lifetime; regular access type for password auth.
+            # SIGNIN clause references `$user` so the SDK's default ScopedAuth
+            # (NS, DB, AC, user, pass) maps cleanly. For arbitrary param keys
+            # (e.g. `$email`, `$name`), use the dict-variant `ScopedAuth(ns,
+            # db, scope, params::Dict)` so SIGNIN can pick them up.
             SurrealDB.query(admin, """
                 DEFINE ACCESS expiry_test ON DATABASE TYPE RECORD
-                    SIGNIN (SELECT * FROM jwt_user WHERE name = \$name)
+                    SIGNIN (SELECT * FROM jwt_user WHERE name = \$user)
                     DURATION FOR SESSION 1s
             """)
             SurrealDB.create(admin, "jwt_user:alice", Dict("name" => "alice"))
