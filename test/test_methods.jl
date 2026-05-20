@@ -122,6 +122,16 @@ end
     end
 end
 
+@testset "Run builtin function" begin
+    # `type::is::array` is a stable builtin across v2 and v3. Tests the run()
+    # RPC end-to-end — method dispatch, args marshalling, response parsing.
+    result = SurrealDB.run(client, "type::is::array", Any[Any[1, 2, 3]])
+    @test result === true
+
+    result = SurrealDB.run(client, "type::is::array", Any["not an array"])
+    @test result === false
+end
+
 clean_table!(client, "test_crud")
 clean_table!(client, "person")
 clean_table!(client, "knows")
