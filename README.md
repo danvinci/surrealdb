@@ -118,16 +118,25 @@ embedded backend collapses them).
 
 ```julia
 sub = SurrealDB.live(db, "user")
-@async for notification in sub
-    @info "live event" action=notification["action"] data=notification["result"]
+@async for n::SurrealDB.LiveNotification in sub
+    @info "live event" action=n.action record=n.record data=n.result
 end
 
 SurrealDB.kill!(sub)
 ```
 
-`for n in sub` iterates the underlying channel. After a reconnect the
-SDK re-issues `LIVE SELECT` and overwrites `sub.query_id` with the new
-server-assigned UUID, so caller-held handles keep working.
+Each notification is a [`LiveNotification`](@ref) with typed fields
+(`action`, `query_id`, `record`, `result`, `session`); it also subtypes
+`AbstractDict` so legacy `n["action"]` access keeps working. After a
+reconnect the SDK re-issues `LIVE SELECT` and overwrites `sub.query_id`
+with the new server-assigned UUID, so caller-held handles keep working.
+
+## Running functions
+
+```julia
+SurrealDB.run(db, "type::is::array", [[1, 2, 3]])  # → true
+SurrealDB.run(db, "fn::greet", ["world"])           # user-defined function
+```
 
 ## Sessions and transactions
 

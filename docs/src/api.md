@@ -58,6 +58,7 @@ SurrealDB.patch
 SurrealDB.patch_add
 SurrealDB.patch_remove
 SurrealDB.patch_replace
+SurrealDB.run
 SurrealDB.let!
 SurrealDB.unset!
 ```
@@ -68,6 +69,7 @@ SurrealDB.unset!
 SurrealDB.live
 SurrealDB.kill!
 SurrealDB.LiveSubscription
+SurrealDB.LiveNotification
 ```
 
 ## Transactions and sessions
