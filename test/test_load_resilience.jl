@@ -62,8 +62,18 @@ end
 
             # Wait for all tasks to settle. None may hang past the
             # deadline — that's the cardinal sin.
+            #
+            # Per-task budget is the SDK's `rpc_timeout` plus slack: a task
+            # that lost its socket-drop signal (e.g. it registered AFTER
+            # `_signal_inflight_disconnect!` ran on the dropped connection)
+            # will eventually fall through to the bounded `take!` wait and
+            # raise `ConnectionError("RPC timeout ...")`. The earlier 5s
+            # deadline pre-dates `rpc_timeout` and produces flaky CI failures
+            # on under-load runners where the signal hasn't propagated within
+            # 5s — the task IS settling correctly, just outside the window.
+            per_task_deadline = client.connection.rpc_timeout + 5.0
             for (i, t) in enumerate(tasks)
-                deadline = time() + 5.0
+                deadline = time() + per_task_deadline
                 while !istaskdone(t) && time() < deadline
                     sleep(0.05)
                 end
