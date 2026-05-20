@@ -100,8 +100,6 @@ Base.@kwdef mutable struct RemoteConnection{P} <: AbstractRemoteConnection
     rpc_timeout::Float64 = 30.0
 end
 
-# Concrete protocol-tagged types. Methods that only apply to one transport
-# dispatch on these aliases (e.g. `live(::SurrealClient{<:RemoteWSConnection}, ...)`).
 const RemoteWSConnection = RemoteConnection{:ws}
 const RemoteHTTPConnection = RemoteConnection{:http}
 
@@ -161,8 +159,6 @@ function _parse_scheme(url::String)
     if m === nothing
         # Extract the scheme prefix (or report the whole URL if there isn't one)
         scheme = match(r"^([a-zA-Z][a-zA-Z0-9+.-]*)://", url)
-        # `scheme.captures[1]` is `Union{Nothing, SubString}` per regex semantics;
-        # coerce to `String` so the typed UnsupportedEngineError ctor matches.
         bad = scheme === nothing ? url : String(something(scheme.captures[1], url))
         throw(UnsupportedEngineError(bad))
     end
@@ -209,7 +205,6 @@ function _set_status!(conn::RemoteConnection, status::Symbol)
 end
 
 function _connect_remote!(conn::RemoteHTTPConnection)
-    # HTTP is stateless — no socket to open, no reader task needed
     _set_status!(conn, :connected)
     return nothing
 end
@@ -224,17 +219,12 @@ end
 function _close_remote!(conn::RemoteConnection)
     conn.reconnect = false
     _set_status!(conn, :disconnected)
-    # Pinger only exists on the WS transport; HTTP doesn't have one.
-    # Short-circuit BEFORE calling _stop_pinger! since that has no method
-    # for RemoteHTTPConnection (intentional dispatch tightening from R10).
+    # _stop_pinger! has no method for HTTP — short-circuit here.
     if conn isa RemoteHTTPConnection
         return nothing
     end
     _stop_pinger!(conn)
-    # Force the underlying WS to close NOW so the reader's `read` returns
-    # EOF immediately. Without this, the writer's "" sentinel exits the
-    # writer task but the reader can stay blocked on `read(ws)` until the
-    # server-side timeout fires — hundreds of seconds in the worst case.
+    # Close WS before signalling writer — otherwise reader blocks on read(ws) until server timeout.
     if conn.ws !== nothing
         try; close(conn.ws); catch; end
     end
@@ -246,13 +236,8 @@ function _close_remote!(conn::RemoteConnection)
         close(conn.write_channel)
     catch
     end
-    # Wait for the reconnect-loop task to fully unwind so each call to
-    # `close!` drains the background tasks before returning. Without this
-    # wait, rapid sequential `connect → close → connect` cycles (the
-    # pattern in the test suite) accumulate dangling reader tasks holding
-    # references to dead sockets, eventually choking the WebSockets/HTTP
-    # connection pool. Bound the wait so a misbehaving task never hangs
-    # `close!` permanently.
+    # Wait for reconnect loop to unwind — rapid connect/close/connect cycles
+    # accumulate dangling reader tasks otherwise. 2s cap prevents permanent hang.
     rt = conn.reader_task
     if rt !== nothing && !istaskdone(rt)
         deadline = time() + 2.0
@@ -402,7 +387,6 @@ function connect(url::String;
                                tls_verify=tls_verify,
                                rpc_timeout=rpc_timeout)
         _connect_remote!(conn)
-        # Wait briefly for WS to establish connection (HTTP is instant)
         if is_ws
             for _ in 1:50
                 conn.status == :connected && break

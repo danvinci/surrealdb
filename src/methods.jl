@@ -1,5 +1,4 @@
 # Data manipulation methods for SurrealDB.jl
-# Each method sends an RPC to the server via _rpc_call
 
 # Internal representation of a single query statement result.
 # `error` widened to ServerError post-D1: _parse_query_error dispatches on
@@ -91,30 +90,21 @@ See also: [`query`](@ref), [`query_one`](@ref), [`to_table`](@ref).
 function query_table(client::SurrealClient{C}, sql::String;
                      vars=Dict{String, Any}()) where {C<:AbstractConnection}
     results = query(client, sql; vars=vars)
-    # `query()` returns Vector{Any} where shape depends on transport:
-    #   • Remote multi-statement: each element is a Vector{Dict} (one per statement)
-    #   • Remote single-statement: one-element Vector containing a Vector{Dict}
-    #   • Embedded any: a flat Vector{Dict} (rows directly, single statement)
-    # Detect shape by checking element types. If every element is itself an
-    # AbstractVector, treat each as a statement; if every element is a Dict,
-    # treat the whole list as one statement's rows.
+    # Remote multi-stmt: Vector{Vector{Dict}}. Embedded / single-stmt: flat Vector{Dict}.
     if isempty(results)
         return QueryResultTable[QueryResultTable(Dict{String, Any}[])]
     end
     if all(r -> r isa AbstractVector, results)
-        # Multi-statement (remote)
         return QueryResultTable[
             QueryResultTable(Dict{String, Any}[
                 Dict{String, Any}(r) for r in stmt if r isa AbstractDict
             ]) for stmt in results
         ]
     elseif all(r -> r isa AbstractDict, results)
-        # Single-statement flat rows (embedded, or single-statement remote with auto-flatten)
         rows = Dict{String, Any}[Dict{String, Any}(r) for r in results]
         return QueryResultTable[QueryResultTable(rows)]
     else
-        # Mixed (e.g. INFO FOR DB returning a Dict alongside SELECT) — wrap each
-        # element in its own table; non-tabular elements become empty tables.
+        # Mixed shapes (e.g. INFO FOR DB alongside SELECT) — wrap each element.
         return QueryResultTable[
             r isa AbstractVector ?
                 QueryResultTable(Dict{String, Any}[Dict{String, Any}(x) for x in r if x isa AbstractDict]) :
@@ -476,9 +466,7 @@ for SurrealDB-specific types.
 """
 function _construct_one(::Type{T}, dict::AbstractDict) where {T}
     normalized = _normalize_for_construct(T, dict)
-    # Build a NamedTuple with keys matching struct field names.
-    # StructTypes.constructfrom handles NamedTuple correctly but has a dispatch
-    # bug with plain Dict{String, Any}.
+    # StructTypes.constructfrom works on NamedTuple but has a dispatch bug with plain Dict.
     pairs = [Symbol(f) => get(normalized, string(f), nothing) for f in fieldnames(T)]
     nt = (; pairs...)
     return StructTypes.constructfrom(T, nt)
@@ -501,9 +489,7 @@ function _normalize_for_construct(::Type{T}, dict) where {T}
             field_types[string(name)] = typ
         end
     catch e
-        # `fieldnames`/`fieldtypes` can throw on abstract or non-struct T.
-        # Fall back to no field-type info; coercion below stays no-op for
-        # unknown field types. Anything else (OOM, etc.) is a bug — rethrow.
+        # fieldnames/fieldtypes throw on abstract T; anything else is a real bug.
         e isa Union{ArgumentError, MethodError} || rethrow()
     end
 
@@ -560,7 +546,6 @@ function _coerce_value(value, ::Type{T}) where {T}
     if value isa AbstractDict && _is_struct_type(T)
         return _construct_one(T, value)
     elseif value isa AbstractVector && T <: AbstractVector
-        # Recurse into each element using the declared element type
         return [_coerce_value(x, eltype(T)) for x in value]
     end
     return value
