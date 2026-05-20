@@ -122,14 +122,14 @@ end
     end
 end
 
-@testset "Run builtin function" begin
-    # `type::is::array` is a stable builtin across v2 and v3. Tests the run()
-    # RPC end-to-end — method dispatch, args marshalling, response parsing.
-    result = SurrealDB.run(client, "type::is::array", Any[Any[1, 2, 3]])
-    @test result === true
-
-    result = SurrealDB.run(client, "type::is::array", Any["not an array"])
-    @test result === false
+@testset "Run user-defined function" begin
+    # run() targets the function registry (fn::*), not builtin SQL functions —
+    # exercise it via a DEFINE FUNCTION created for the test.
+    try; SurrealDB.query(client, "REMOVE FUNCTION fn::doubled"); catch; end
+    SurrealDB.query(client, "DEFINE FUNCTION fn::doubled(\$x: int) {RETURN \$x * 2;}")
+    result = SurrealDB.run(client, "fn::doubled", Any[21])
+    @test result == 42
+    try; SurrealDB.query(client, "REMOVE FUNCTION fn::doubled"); catch; end
 end
 
 clean_table!(client, "test_crud")
