@@ -43,7 +43,10 @@ try SurrealDB.query(client, "DEFINE TABLE test_edge TYPE ANY SCHEMALESS"); catch
 # 1. Live via raw SurrealQL query (Go: TestLiveViaQuery)
 # ================================================================
 @testset "Live via raw SurrealQL" begin
-    if client.connection.protocol == :http
+    # R10 (parametric split) removed `conn.protocol` — protocol is now in the
+    # type parameter (`RemoteConnection{:ws}` vs `RemoteConnection{:http}`).
+    # Check the type directly instead of a field that no longer exists.
+    if client.connection isa SurrealDB.RemoteHTTPConnection
         @warn "Skipping live query test on HTTP"
     else
         # Go SDK TestLiveViaQuery: LIVE SELECT via raw query returns a UUID
