@@ -20,6 +20,7 @@ export use!, info, version, health
 export query, query_table, query_one, create, select, update, delete, insert, upsert, merge
 export relate, insert_relation
 export patch, patch_add, patch_remove, patch_replace
+export run
 export let!, unset!
 export live, kill!
 export begin!, commit!, cancel!
@@ -32,7 +33,7 @@ export to_table, to_metagraph
 # --- Types ---
 export RecordID, Table, SurrealValue
 export RootAuth, NamespaceAuth, ScopedAuth, JwtAuth
-export Relationship, LiveSubscription
+export Relationship, LiveSubscription, LiveNotification
 
 # --- Errors ---
 export SurrealDBError, SurrealError, RPCError, ConnectionError

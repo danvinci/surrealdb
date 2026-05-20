@@ -354,6 +354,26 @@ function patch_add(client::SurrealClient{C}, what, path::String, value) where {C
 end
 
 """
+    run(client, fn_name::String, args=Any[]; version=nothing) -> Any
+
+Invoke a SurrealDB function — builtin (`type::*`, `string::*`, ...) or
+user-defined (`fn::*`).
+
+- `fn_name`: Function name including namespace, e.g. `"fn::greet"` or `"type::is::array"`
+- `args`: Positional args as a `Vector`
+- `version`: Optional semver string for versioned user functions
+
+# Examples
+```julia
+SurrealDB.run(db, "type::is::array", [[1, 2, 3]])  # → true
+SurrealDB.run(db, "fn::greet", ["world"])
+```
+"""
+function run(client::SurrealClient{C}, fn_name::String, args=Any[]; version=nothing) where {C<:AbstractConnection}
+    return _rpc_call(client, "run", Any[fn_name, version, args])
+end
+
+"""
     patch_remove(client, what, path::String)
 
 Convenience wrapper around [`patch`](@ref) that issues a single

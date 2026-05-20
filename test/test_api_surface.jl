@@ -19,7 +19,7 @@ const EXPECTED_EXPORTS = Set([
     # Core types
     :AbstractConnection, :RemoteConnection, :EmbeddedConnection,
     :SurrealClient, :SurrealSession,
-    :RecordID, :Table, :SurrealValue, :Relationship, :LiveSubscription,
+    :RecordID, :Table, :SurrealValue, :Relationship, :LiveSubscription, :LiveNotification,
 
     # Auth
     :RootAuth, :NamespaceAuth, :ScopedAuth, :JwtAuth,
@@ -38,6 +38,7 @@ const EXPECTED_EXPORTS = Set([
     :create, :select, :update, :delete, :insert, :upsert, :merge,
     :relate, :insert_relation,
     :patch, :patch_add, :patch_remove, :patch_replace,
+    :run,
     :let!, :unset!,
 
     # Live queries
